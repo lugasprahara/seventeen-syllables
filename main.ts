@@ -20,23 +20,52 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 
-const LINES: { text: string; syllables: number }[] = [
-  { text: "Cursor blinks at three", syllables: 5 },
-  { text: "the final log line just says", syllables: 7 },
-  { text: "segfault — then silence", syllables: 5 },
+// Each line carries its own word-by-word syllable count, so the form
+// check below adds the poem up from its words instead of trusting a
+// hand-written total per line.
+type HaikuLine = { text: string; parts: [word: string, syllables: number][] };
+
+const LINES: HaikuLine[] = [
+  {
+    text: "Cursor blinks at three",
+    parts: [["Cursor", 2], ["blinks", 1], ["at", 1], ["three", 1]],
+  },
+  {
+    text: "the final log line just says",
+    parts: [["the", 1], ["final", 2], ["log", 1], ["line", 1], ["just", 1], ["says", 1]],
+  },
+  {
+    text: "segfault — then silence",
+    parts: [["segfault", 2], ["then", 1], ["silence", 2]],
+  },
 ];
+
+const syllablesOf = (line: HaikuLine): number =>
+  line.parts.reduce((sum, [, count]) => sum + count, 0);
 
 const HAIKU = LINES.map((line) => line.text).join("\n");
 
 // The form is the whole game: refuse to ship anything that is not a
 // 5-7-5 haiku of exactly seventeen syllables inside the gate's limits.
-const shape = LINES.map((line) => line.syllables);
-if (shape.join("-") !== "5-7-5" || shape.reduce((a, b) => a + b, 0) !== 17) {
-  throw new Error(`haiku must be 5-7-5 (17 syllables), got ${shape.join("-")}`);
+// Each failure names the exact line or limit that broke, so a bad edit
+// is debuggable from the error alone.
+function assertHaikuForm(lines: HaikuLine[], haiku: string): void {
+  const shape = lines.map(syllablesOf);
+  const total = shape.reduce((a, b) => a + b, 0);
+  if (shape.join("-") !== "5-7-5") {
+    throw new Error(
+      `haiku lines must scan 5-7-5, got ${shape.join("-")} (${total} syllables total)`,
+    );
+  }
+  if (total !== 17) {
+    throw new Error(`haiku must total exactly 17 syllables, got ${total}`);
+  }
+  if (haiku.length < 1 || haiku.length > 200) {
+    throw new Error(`haiku must be 1-200 characters, got ${haiku.length}`);
+  }
 }
-if (HAIKU.length < 1 || HAIKU.length > 200) {
-  throw new Error(`haiku must be 1-200 characters, got ${HAIKU.length}`);
-}
+
+assertHaikuForm(LINES, HAIKU);
 
 mkdirSync("/output", { recursive: true });
 writeFileSync("/output/entry.txt", HAIKU, "utf8");
